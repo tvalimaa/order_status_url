@@ -1,0 +1,5 @@
+order_status_url.settings_form:
+  title: 'Order Status URL'
+  description: 'Configure the URL path used for the guest order status lookup page.'
+  parent: commerce.configuration
+  route_name: order_status_url.settings_form

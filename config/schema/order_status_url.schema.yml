@@ -1,0 +1,7 @@
+order_status_url.settings:
+  type: config_object
+  label: 'Order Status URL settings'
+  mapping:
+    path:
+      type: string
+      label: 'URL path segment'

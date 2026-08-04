@@ -1,0 +1,19 @@
+order_status_url.guest_order_status:
+  path: '/order-status/{uuid}'
+  defaults:
+    _controller: '\Drupal\order_status_url\Controller\OrderStatusController::status'
+    _title: 'Order Status'
+  requirements:
+    _access: 'TRUE'
+  options:
+    parameters:
+      uuid:
+        type: string
+
+order_status_url.settings_form:
+  path: '/admin/commerce/config/order-status-url'
+  defaults:
+    _form: '\Drupal\order_status_url\Form\SettingsForm'
+    _title: 'Order Status URL settings'
+  requirements:
+    _permission: 'administer site configuration'

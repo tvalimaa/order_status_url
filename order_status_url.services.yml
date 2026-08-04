@@ -1,0 +1,6 @@
+services:
+  order_status_url.route_subscriber:
+    class: Drupal\order_status_url\Routing\RouteSubscriber
+    arguments: ['@config.factory']
+    tags:
+      - { name: event_subscriber }

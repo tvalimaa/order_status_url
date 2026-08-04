@@ -1,0 +1,83 @@
+<?php
+
+/**
+ * @file
+ * Contains hooks for the Order Status URL module.
+ */
+
+use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\Core\Render\BubbleableMetadata;
+use Drupal\Core\Url;
+
+/**
+ * Implements hook_theme().
+ */
+function order_status_url_theme($existing, $type, $theme, $path) {
+  return [
+    'order_status_page' => [
+      'variables' => [
+        'order' => NULL,
+        'status_label' => NULL,
+      ],
+      'template' => 'order-status-page',
+    ],
+  ];
+}
+
+/**
+ * Implements hook_theme_suggestions_order_status_page().
+ */
+function order_status_url_theme_suggestions_order_status_page(array $variables) {
+  $suggestions = [];
+  /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+  if (!empty($variables['order']) && $variables['order'] instanceof OrderInterface) {
+    $suggestions[] = 'order_status_page__' . $variables['order']->bundle();
+  }
+  return $suggestions;
+}
+
+/**
+ * Implements hook_token_info().
+ *
+ * Adds a token under the existing 'commerce_order' token type (provided
+ * by the Token module's automatic entity token support) so the guest
+ * order status URL can be inserted into order receipt emails or any
+ * other token-aware field without custom code.
+ */
+function order_status_url_token_info() {
+  $info['tokens']['commerce_order']['order-status-url'] = [
+    'name' => t('Order status URL'),
+    'description' => t('The absolute URL of the guest order status lookup page for this order (requires the Order Status URL module).'),
+  ];
+
+  return $info;
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function order_status_url_tokens($type, $tokens, array $data, array $options, BubbleableMetadata $bubbleable_metadata) {
+  $replacements = [];
+
+  if ($type !== 'commerce_order' || empty($data['commerce_order'])) {
+    return $replacements;
+  }
+
+  /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+  $order = $data['commerce_order'];
+
+  foreach ($tokens as $name => $original) {
+    if ($name === 'order-status-url') {
+      $url = Url::fromRoute('order_status_url.guest_order_status', [
+        'uuid' => $order->uuid(),
+      ], ['absolute' => TRUE]);
+
+      $bubbleable_metadata->addCacheableDependency($order);
+      $bubbleable_metadata->addCacheTags(['config:order_status_url.settings']);
+
+      $replacements[$original] = $url->toString();
+    }
+  }
+
+  return $replacements;
+}

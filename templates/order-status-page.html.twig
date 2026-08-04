@@ -1,0 +1,50 @@
+{#
+/**
+ * @file
+ * Default theme implementation for the guest order status page.
+ *
+ * Available variables:
+ * - order: The loaded commerce_order entity.
+ * - status_label: The human-readable label of the order's current state.
+ */
+#}
+<div class="order-status">
+  <h2>{{ 'Order #@number'|t({'@number': order.getOrderNumber ?: order.id}) }}</h2>
+
+  <p>
+    <strong>{{ 'Status:'|t }}</strong>
+    {{ status_label }}
+  </p>
+
+  <p>
+    <strong>{{ 'Placed on:'|t }}</strong>
+    {{ order.getPlacedTime|date('long') }}
+  </p>
+
+  <p>
+    <strong>{{ 'Total:'|t }}</strong>
+    {{ order.getTotalPrice|commerce_price_format }}
+  </p>
+
+  <h3>{{ 'Items'|t }}</h3>
+  <ul>
+    {% for item in order.getItems %}
+      <li>
+        {{ item.getTitle }} &times; {{ item.getQuantity }}
+        — {{ item.getTotalPrice|commerce_price_format }}
+      </li>
+    {% endfor %}
+  </ul>
+
+  {% if order.getShipments is defined %}
+    {% for shipment in order.getShipments %}
+      <p>
+        <strong>{{ 'Shipment status:'|t }}</strong>
+        {{ shipment.getState.getLabel }}
+        {% if shipment.getTrackingCode %}
+          — {{ 'Tracking:'|t }} {{ shipment.getTrackingCode }}
+        {% endif %}
+      </p>
+    {% endfor %}
+  {% endif %}
+</div>
