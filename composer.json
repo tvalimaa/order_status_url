@@ -1,0 +1,10 @@
+{
+    "name": "tvalimaa/order_status_url",
+    "description": "Order status URL module",
+    "type": "drupal-module",
+    "license": "GPL-2.0+",
+    "require": {
+        "php": "^8.1"
+    }
+}
+
