@@ -75,16 +75,58 @@ class OrderStatusController extends ControllerBase {
 
     if (!$session->get($session_key)) {
       // Not verified yet in this session: show the email + CAPTCHA form.
-      return $this->formBuilderService->getForm(
+      // Forms are inherently uncacheable in Drupal (unique build/CSRF
+      // tokens per request), so no explicit #cache handling is needed
+      // here.
+      $build = $this->formBuilderService->getForm(
         '\Drupal\order_status_url\Form\OrderStatusVerifyForm',
         $order
       );
     }
+    else {
+      $build = [
+        '#theme' => 'order_status_page',
+        '#order' => $order,
+        '#status_label' => $order->getState()->getLabel(),
+        // CRITICAL: this render array contains another customer's
+        // order data and must never be shared across sessions via
+        // Drupal's Internal/Dynamic Page Cache. Without this, a
+        // *different* anonymous visitor requesting the exact same
+        // URL could be served this visitor's cached order data
+        // without ever passing the email verification form.
+        '#cache' => [
+          'max-age' => 0,
+        ],
+      ];
+    }
 
-    return [
-      '#theme' => 'order_status_page',
-      '#order' => $order,
-      '#status_label' => $order->getState()->getLabel(),
+    $this->addPrivacyHeaders($build);
+
+    return $build;
+  }
+
+  /**
+   * Attaches headers that keep this page out of search/AI indexes and
+   * stop the browser leaking the UUID-bearing URL to third parties.
+   *
+   * @param array $build
+   *   The render array to attach headers to, by reference.
+   */
+  protected function addPrivacyHeaders(array &$build) {
+    // Keep crawlers (search engines and AI crawlers that respect
+    // standard robots directives) from indexing or archiving this
+    // URL, in case a link ever ends up somewhere public.
+    $build['#attached']['http_header'][] = [
+      'X-Robots-Tag',
+      'noindex, nofollow, noarchive, nosnippet',
+    ];
+
+    // Prevent the browser from sending this UUID-bearing URL as the
+    // Referer header to any third-party resource the page loads
+    // (analytics, fonts, embedded content, etc.).
+    $build['#attached']['http_header'][] = [
+      'Referrer-Policy',
+      'no-referrer',
     ];
   }
 

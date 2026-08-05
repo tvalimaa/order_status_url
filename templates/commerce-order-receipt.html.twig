@@ -1,0 +1,39 @@
+{#
+/**
+ * @file
+ * Extends Commerce's default order receipt template to add the guest
+ * order status link inside the existing 'additional_information'
+ * block, instead of appending it after the whole receipt.
+ *
+ * This file ships inside the order_status_url module itself and is
+ * wired in automatically by
+ * order_status_url_theme_registry_alter() in order_status_url.module
+ * — no theme-level template override is needed.
+ *
+ * If your active theme (or a base theme) already provides its own
+ * commerce-order-receipt.html.twig, that takes precedence
+ * automatically and this file is never used; see the "theme takes
+ * precedence" note in the module's README for how to add the link to
+ * a theme override instead.
+ *
+ * Requires order_status_url's hook_preprocess_commerce_order_receipt()
+ * to be active (ships in the same .module file), which supplies the
+ * 'order_status_url' variable used below. It resolves to NULL for
+ * registered-customer orders, so the link only appears for guests.
+ *
+ * After enabling/updating this module: drush cr (theme registry and
+ * Twig templates are both cached).
+ */
+#}
+{% extends "@commerce_order/commerce-order-receipt.html.twig" %}
+
+{% block additional_information %}
+  {{ 'Thank you for your order!'|t }}
+  {% if order_status_url %}
+    <p style="margin-top: 15px;">
+      <a href="{{ order_status_url }}" style="color: #0e69be; text-decoration: none; font-weight: bold;">
+        {{ 'Check your order status'|t }}
+      </a>
+    </p>
+  {% endif %}
+{% endblock %}

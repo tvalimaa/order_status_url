@@ -81,3 +81,72 @@ function order_status_url_tokens($type, $tokens, array $data, array $options, Bu
 
   return $replacements;
 }
+
+/**
+ * Implements hook_preprocess_commerce_order_receipt().
+ *
+ * Supplies 'order_status_url' so a theme's commerce-order-receipt.html.twig
+ * (or a block-override child template extending it) can render a link
+ * inside the 'additional_information' block, rather than the link only
+ * being appendable after the whole receipt via hook_mail_alter().
+ *
+ * Guest orders only; registered customers already have
+ * /user/{user}/orders/{commerce_order}.
+ */
+function order_status_url_preprocess_commerce_order_receipt(&$variables) {
+  $order = $variables['order_entity'] ?? NULL;
+
+  if (!$order instanceof \Drupal\commerce_order\Entity\OrderInterface) {
+    return;
+  }
+
+  if ((int) $order->getCustomerId() !== 0) {
+    return;
+  }
+
+  $variables['order_status_url'] = \Drupal::token()->replace(
+    '[commerce_order:order-status-url]',
+    ['commerce_order' => $order]
+  );
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ *
+ * Points the 'commerce_order_receipt' theme hook at this module's own
+ * templates/commerce-order-receipt.html.twig (a block override adding
+ * the guest order status link), so the receipt email picks up the
+ * link without requiring any theme-level template file.
+ *
+ * If the active theme (or a base theme) already provides its own
+ * commerce-order-receipt.html.twig, Drupal's normal theme registry
+ * building will have already pointed this hook's 'path' at that
+ * theme's templates directory by the time this hook runs. In that
+ * case we deliberately do nothing, so a theme override always takes
+ * precedence over this module's copy.
+ */
+function order_status_url_theme_registry_alter(&$theme_registry) {
+  if (empty($theme_registry['commerce_order_receipt'])) {
+    return;
+  }
+
+  $info = &$theme_registry['commerce_order_receipt'];
+
+  /** @var \Drupal\Core\Extension\ModuleExtensionList $module_list */
+  $module_list = \Drupal::service('extension.list.module');
+  $commerce_order_templates_path = $module_list->getPath('commerce_order') . '/templates';
+
+  // If 'path' no longer points at commerce_order's own templates
+  // directory, something else (almost certainly a theme) has already
+  // overridden this template. Don't clobber that.
+  if (!isset($info['path']) || $info['path'] !== $commerce_order_templates_path) {
+    return;
+  }
+
+  $info['path'] = $module_list->getPath('order_status_url') . '/templates';
+
+  // The theme registry caches file paths and mtimes per hook; make
+  // sure our override's timestamp is included so cache invalidation
+  // still works correctly if this template is edited.
+  $info['template'] = 'commerce-order-receipt';
+}

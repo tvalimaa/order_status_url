@@ -173,4 +173,156 @@ that the Token module automatically generates for the order entity.
 
 To find it in a token-aware field's "Browse available tokens" list,
 look under **Order → Order status URL**.
-- The checkout "Complete" step's render array.
+
+## Adding the link to the order receipt email
+
+Commerce's `commerce-order-receipt.html.twig` is a fixed-layout
+template with no configurable "extra content" area, so
+`hook_preprocess_commerce_order_receipt()` alone can't make new markup
+appear — the base template simply doesn't reference variables it
+doesn't already know about, and there's no UI for this in Commerce.
+
+**This module handles it automatically — no theme changes needed.**
+Two pieces work together:
+
+- `order_status_url_preprocess_commerce_order_receipt()` supplies an
+  `order_status_url` variable (resolved via the token, `NULL` for
+  registered-customer orders so it never shows there).
+- `order_status_url_theme_registry_alter()` points the
+  `commerce_order_receipt` theme hook at this module's own
+  `templates/commerce-order-receipt.html.twig`, which `{% extends %}`
+  Commerce's base template and overrides only the
+  `additional_information` block (the one that prints "Thank you for
+  your order!"), adding the link right below it — without duplicating
+  the whole 150-line file.
+
+Enabling the module is enough; run `drush cr` afterward since the
+theme registry and Twig templates are both cached.
+
+**If your theme already has its own `commerce-order-receipt.html.twig`
+override**, that continues to take precedence automatically — this
+module checks whether the theme registry's path for this hook still
+points at `commerce_order`'s own templates directory before touching
+it, and backs off if a theme has already claimed it. In that case, add
+the link to your theme's override yourself, referencing the same
+`order_status_url` variable (already supplied by the preprocess hook
+regardless of which template ends up used):
+
+```twig
+{% block additional_information %}
+  {{ 'Thank you for your order!'|t }}
+  {% if order_status_url %}
+    <p style="margin-top: 15px;">
+      <a href="{{ order_status_url }}">{{ 'Check your order status'|t }}</a>
+    </p>
+  {% endif %}
+{% endblock %}
+```
+
+**If you'd rather not touch templates or the theme registry at all**,
+an alternative is `hook_mail_alter()`, which appends the link *after*
+the entire rendered receipt instead of inside it:
+
+```php
+/**
+ * Implements hook_mail_alter().
+ */
+function mymodule_mail_alter(array &$message) {
+  if ($message['key'] !== 'order_receipt' || empty($message['params']['order'])) {
+    return;
+  }
+
+  /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+  $order = $message['params']['order'];
+
+  if ((int) $order->getCustomerId() !== 0) {
+    return;
+  }
+
+  $link_html = \Drupal::token()->replace(
+    '<p style="margin-top: 20px;"><a href="[commerce_order:order-status-url]">' . t('Check your order status') . '</a></p>',
+    ['commerce_order' => $order]
+  );
+
+  $message['body'][] = \Drupal\Core\Render\Markup::create($link_html);
+}
+```
+
+All three approaches use the same underlying token — pick whichever
+fits how much you want this module to control versus your theme.
+
+## Security considerations
+
+**UUID guessing itself is not a realistic threat.** A UUIDv4 has 122
+bits of randomness (~5.3×10³⁶ possible values) — brute-forcing a valid
+one is computationally infeasible at any practical request rate.
+The real exposure is around *leakage and caching* of a UUID once it
+exists, which is what the points below address.
+
+### Handled automatically by this module
+
+- **Cross-session cache safety.** The render array for the "verified,
+  showing order data" path is explicitly marked `'#cache' => ['max-age'
+  => 0]`, so Drupal's Internal/Dynamic Page Cache will never cache and
+  replay one visitor's order data to a different anonymous visitor
+  requesting the same URL. (The verification form itself is inherently
+  uncacheable already, being a Drupal form.)
+- **`X-Robots-Tag: noindex, nofollow, noarchive, nosnippet`** is sent
+  on every response from this route, so search engines and AI
+  crawlers that respect standard robots directives won't index or
+  archive it even if a link ends up somewhere public.
+- **`Referrer-Policy: no-referrer`** is sent on every response from
+  this route, so the browser won't leak the UUID-bearing URL to any
+  third-party resource the page loads (analytics scripts, embedded
+  content, etc.) via the `Referer` header.
+- **Rate limiting via Drupal core's Flood API.** Failed email-match
+  attempts are throttled per IP address (5 attempts / 15 minutes by
+  default — see `OrderStatusVerifyForm::FLOOD_LIMIT` and
+  `::FLOOD_WINDOW`), independently of whether CAPTCHA is installed.
+  This is a baseline defense against scripted email-guessing even on
+  sites that don't want CAPTCHA.
+- **CAPTCHA**, when installed and enabled (see above), adds a further,
+  harder-to-automate obstacle on top of the flood limit.
+
+### Steps to take at the site/infrastructure level
+
+These aren't things a module can configure for you, since they live in
+site config or third-party services, but are worth doing given the
+sensitivity of this URL:
+
+- **`robots.txt`.** Add an explicit disallow rule for the configured
+  path prefix (defaults to `order-status`), covering both the general
+  crawler stanza and, if you want extra assurance, specific AI-crawler
+  user agents:
+  ```
+  User-agent: *
+  Disallow: /order-status/
+
+  User-agent: GPTBot
+  Disallow: /order-status/
+
+  User-agent: CCBot
+  Disallow: /order-status/
+
+  User-agent: Google-Extended
+  Disallow: /order-status/
+  ```
+  If you change the path segment via the settings form, update this
+  accordingly — the module can't rewrite `robots.txt` for you (unless
+  you're using a module like RobotsTxt that generates it from config,
+  in which case add an equivalent rule there instead).
+- **Exclude this route from analytics tracking.** This site has
+  Matomo, Piwik Pro, and Google Tag installed — by default, all three
+  will log the full page URL, UUID included, into their dashboards,
+  where it's visible to anyone with analytics access and typically
+  retained far longer than the guest actually needs the link to work.
+  Use each tool's URL exclusion feature (e.g. Matomo's "Exclude URL
+  Parameters/Actions" or a custom URL-rewrite/search-and-replace rule)
+  to mask or drop the UUID segment before it's sent, or exclude the
+  path prefix entirely from tracking.
+- **CDN / reverse proxy caching.** If the site sits behind a CDN or
+  Varnish in front of Drupal, double-check that layer also respects
+  `Cache-Control`/`max-age=0` for this path — Drupal's own page cache
+  is the one layer this module can influence directly; an external
+  cache in front of it needs its own exclusion rule if it doesn't
+  already honor Drupal's cache headers.

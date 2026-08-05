@@ -4,6 +4,7 @@ namespace Drupal\order_status_url\Form;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
@@ -17,8 +18,27 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * to brute-force email addresses against a known order UUID. If
  * CAPTCHA isn't available or is turned off, the email check alone
  * gates access.
+ *
+ * Independently of CAPTCHA, Drupal core's Flood API throttles repeated
+ * failed attempts by IP address, so a baseline rate limit applies even
+ * on sites that don't have CAPTCHA installed.
  */
 class OrderStatusVerifyForm extends FormBase {
+
+  /**
+   * Maximum failed attempts allowed within the flood window, per IP.
+   */
+  const FLOOD_LIMIT = 5;
+
+  /**
+   * Flood window, in seconds (15 minutes).
+   */
+  const FLOOD_WINDOW = 900;
+
+  /**
+   * Flood event name used for this form's attempts.
+   */
+  const FLOOD_EVENT = 'order_status_url.verify_attempt';
 
   /**
    * The module handler.
@@ -35,12 +55,20 @@ class OrderStatusVerifyForm extends FormBase {
   protected $configFactory;
 
   /**
+   * The flood service.
+   *
+   * @var \Drupal\Core\Flood\FloodInterface
+   */
+  protected $flood;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
     $instance = new static();
     $instance->moduleHandler = $container->get('module_handler');
     $instance->configFactory = $container->get('config.factory');
+    $instance->flood = $container->get('flood');
     return $instance;
   }
 
@@ -79,6 +107,17 @@ class OrderStatusVerifyForm extends FormBase {
     if (!$order) {
       $form_state->set('order_uuid', NULL);
       $form_state->set('order_email', NULL);
+      return $form;
+    }
+
+    // Rate-limit by IP before rendering the form at all. This throttles
+    // scripted attempts to guess the email address for a known UUID,
+    // independently of whether CAPTCHA is installed.
+    if (!$this->flood->isAllowed(self::FLOOD_EVENT, self::FLOOD_LIMIT, self::FLOOD_WINDOW)) {
+      $form['rate_limited'] = [
+        '#type' => 'markup',
+        '#markup' => '<p>' . $this->t('Too many attempts. Please try again later.') . '</p>',
+      ];
       return $form;
     }
 
@@ -141,7 +180,10 @@ class OrderStatusVerifyForm extends FormBase {
     $expected = trim(mb_strtolower($expected));
 
     if ($entered !== $expected) {
-      // Generic message: don't hint at what the correct email is.
+      // Register the failed attempt against this IP for flood
+      // control, then give a generic message that doesn't hint at
+      // what the correct email is.
+      $this->flood->register(self::FLOOD_EVENT, self::FLOOD_WINDOW);
       $form_state->setErrorByName('email', $this->t('We could not verify that email against this order. Please check and try again.'));
     }
   }
