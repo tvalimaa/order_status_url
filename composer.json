@@ -1,10 +1,25 @@
 {
     "name": "tvalimaa/order_status_url",
-    "description": "Order status URL module",
-    "type": "drupal-module",
-    "license": "GPL-2.0+",
+    "description": "Configurable, token-integrated guest order status URLs for Drupal Commerce, protected by email verification and optional CAPTCHA.",
+    "type": "drupal-custom-module",
+    "license": "GPL-2.0-or-later",
+    "homepage": "https://github.com/tvalimaa/order_status_url",
+    "support": {
+        "issues": "https://github.com/tvalimaa/order_status_url/issues",
+        "source": "https://github.com/tvalimaa/order_status_url"
+    },
     "require": {
-        "php": "^8.1"
+        "php": ">=8.1",
+        "drupal/core": "^9.5 || ^10 || ^11",
+        "drupal/commerce": "^2.0",
+        "drupal/token": "^1.0"
+    },
+    "suggest": {
+        "drupal/captcha": "Adds a CAPTCHA challenge to the guest email verification form. Detected and used automatically if present; the module works without it."
+    },
+    "extra": {
+        "drupal": {
+            "version": "1.0.0"
+        }
     }
 }
-

@@ -5,3 +5,6 @@ order_status_url.settings:
     path:
       type: string
       label: 'URL path segment'
+    captcha_enabled:
+      type: boolean
+      label: 'Require CAPTCHA on the verification form'

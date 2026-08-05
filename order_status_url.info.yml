@@ -1,11 +1,10 @@
 name: Order Status URL
 type: module
-description: 'Provides a configurable, UUID-based guest order status lookup page for Drupal Commerce, with email verification and CAPTCHA protection.'
+description: 'Provides a configurable, UUID-based guest order status lookup page for Drupal Commerce, with email verification and optional CAPTCHA protection.'
 package: Commerce
 core_version_requirement: ^9 || ^10 || ^11
 dependencies:
   - commerce:commerce
   - commerce:commerce_order
-  - captcha:captcha
   - token:token
 configure: order_status_url.settings_form

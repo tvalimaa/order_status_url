@@ -1,9 +1,9 @@
 # Order Status URL
 
 Provides a UUID-based "check my order" page for **guest** Drupal Commerce
-orders, gated behind an email-match check and a CAPTCHA challenge. The
-URL path segment is configurable via an admin settings form, and
-defaults to `order-status`.
+orders, gated behind an email-match check with optional CAPTCHA
+protection. The URL path segment is configurable via an admin settings
+form, and defaults to `order-status`.
 
 ## What it does
 
@@ -15,8 +15,10 @@ defaults to `order-status`.
   - the order belongs to a registered customer (`uid != 0`) — those
     customers should use `/user/{user}/orders/{commerce_order}` instead,
     which already has proper access control.
-- On first visit, shows a form asking for the email used at checkout,
-  plus a CAPTCHA challenge.
+- On first visit, shows a form asking for the email used at checkout.
+  If the CAPTCHA module is installed and enabled, a CAPTCHA challenge
+  is added automatically; otherwise the email check alone gates
+  access.
 - On successful match, remembers verification in the session and shows
   the order status page (state, placed date, total, line items,
   shipment/tracking info if applicable).
@@ -27,30 +29,85 @@ defaults to `order-status`.
 - The contributed [Token module](https://www.drupal.org/project/token),
   used to expose the `[commerce_order:order-status-url]` token (see
   below).
-- The contributed [CAPTCHA module](https://www.drupal.org/project/captcha).
-  Optionally also install
-  [Image CAPTCHA](https://www.drupal.org/project/captcha) (bundled with
-  the CAPTCHA module) or
-  [reCAPTCHA](https://www.drupal.org/project/recaptcha) if you'd rather
-  use Google's widget.
+- **Optional:** the contributed
+  [CAPTCHA module](https://www.drupal.org/project/captcha). If it's
+  installed and enabled, a "Require CAPTCHA" setting appears on this
+  module's settings form and a CAPTCHA element is added to the
+  verification form automatically. If it's not installed, the module
+  works fine without it — the email check is the only gate.
 
 ## Installation
 
+### Option A: via Composer (this repository)
+
+This module isn't on Packagist or drupal.org, so the site's root
+`composer.json` needs a VCS repository entry pointing at this GitHub
+repo before it can be required normally:
+
+```json
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/tvalimaa/order_status_url"
+        }
+    ]
+}
+```
+
+Then require it like any other package:
+
+```
+composer require tvalimaa/order_status_url:^1.0
+```
+
+Composer will resolve `drupal/commerce` and `drupal/token`
+automatically from the module's own `composer.json`. `drupal/captcha`
+is listed as a Composer `suggest`, not a hard dependency — add it
+separately if you want CAPTCHA protection (see below). Because the
+module's `type` is `drupal-custom-module`, a standard
+`drupal/recommended-project`-based site will place it under
+`web/modules/custom/order_status_url` automatically via its existing
+`installer-paths` configuration — no extra path mapping needed.
+
+> **Note:** Composer's VCS repository resolves version constraints
+> like `^1.0` from git tags. Push a `1.0.0` tag to this repo before
+> requiring it that way, or use a branch reference instead — e.g.
+> `composer require tvalimaa/order_status_url:dev-main` if you haven't
+> tagged a release yet.
+
+Once required, enable it:
+
+```
+drush en order_status_url -y
+```
+
+### Option B: manual placement
+
 1. Place this module in `modules/custom/order_status_url`.
-2. Install Token and CAPTCHA if not already enabled:
+2. Install Token if not already enabled:
    ```
-   composer require drupal/token drupal/captcha
-   drush en token captcha image_captcha -y
+   composer require drupal/token
+   drush en token -y
    ```
 3. Enable this module:
    ```
    drush en order_status_url -y
    ```
-4. Configure the default CAPTCHA challenge type at
-   `/admin/config/people/captcha`. The form uses
-   `'#captcha_type' => 'default'`, so it automatically follows whatever
-   challenge you set there (image, math, reCAPTCHA, etc.) — no code
-   changes needed if you switch challenge types later.
+4. **Optional — CAPTCHA protection.** Install and enable CAPTCHA (and
+   a challenge plugin such as Image CAPTCHA):
+   ```
+   composer require drupal/captcha
+   drush en captcha image_captcha -y
+   ```
+   Once enabled, a "Require CAPTCHA on the email verification form"
+   checkbox appears on this module's settings form, checked by
+   default. The form uses `'#captcha_type' => 'default'`, so it
+   automatically follows whatever challenge type is configured at
+   `/admin/config/people/captcha` — no code changes needed if you
+   switch challenge types later. If CAPTCHA is never installed, the
+   verification form simply omits the challenge and relies on the
+   email check alone.
 
 ## Configuring the URL path
 
@@ -76,9 +133,9 @@ with no configuration needed.
 
 ## Generating the link
 
-For places that don't support tokens — a custom event subscriber, a
-checkout pane render array, etc. — build the URL directly wherever you
-have a loaded `$order`:
+Wherever you have a loaded `$order` (checkout completion pane, order
+receipt email, a `commerce_order.place.post_transition` event
+subscriber, etc.):
 
 ```php
 use Drupal\Core\Url;
@@ -92,9 +149,11 @@ Because the link is generated from the route name (not a hard-coded
 path), it automatically reflects whatever path segment is currently
 configured — no code changes needed if you later change the setting.
 
-If the target does support tokens (e.g. the order receipt email body),
-use `[commerce_order:order-status-url]` instead — see "Using the token
-instead" below.
+Typical places to surface it:
+
+- The order confirmation / receipt email (override
+  `commerce_order.receipt` mail template or use
+  `hook_mail_alter()` / a mail event subscriber).
 
 ## Using the token instead
 
@@ -115,23 +174,3 @@ that the Token module automatically generates for the order entity.
 To find it in a token-aware field's "Browse available tokens" list,
 look under **Order → Order status URL**.
 - The checkout "Complete" step's render array.
-
-## Notes / things you may want to extend
-
-- **Session-scoped verification.** Once a visitor verifies with the
-  correct email, they won't be re-prompted for that UUID again in the
-  same session. Remove/shorten this if you'd rather re-verify every
-  visit.
-- **Rate limiting.** The CAPTCHA slows down brute-force guessing of
-  emails against a known UUID; consider also enabling Drupal core's
-  flood control or a module like Login Security if you want to throttle
-  repeated failed attempts by IP.
-- **"Find my order" entry point.** This module assumes the guest has
-  the direct link (from email/receipt). If you want a page where they
-  can enter an order number + email and get redirected to their UUID
-  URL (for when the original email is lost), that's a natural
-  follow-up form to add — ask if you'd like it built out.
-- **Template overrides.** The status page uses the theme hook
-  `order_status_page` (template `order-status-page.html.twig`) with a
-  suggestion `order_status_page__{order_bundle}` so you can override it
-  per order type in your theme.
