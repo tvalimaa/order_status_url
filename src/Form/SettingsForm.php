@@ -10,24 +10,19 @@ use Drupal\order_status_url\Routing\RouteSubscriber;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Configures the URL path segment and CAPTCHA behavior for the order
- * status lookup page.
+ * Configures the URL path segment and CAPTCHA behavior.
  */
 class SettingsForm extends ConfigFormBase {
 
   /**
    * The module handler, used to detect whether captcha is available.
-   *
-   * @var \Drupal\Core\Extension\ModuleHandlerInterface
    */
-  protected $moduleHandler;
+  protected ModuleHandlerInterface $moduleHandler;
 
   /**
    * The route builder, used to rebuild routes after the path changes.
-   *
-   * @var \Drupal\Core\Routing\RouteBuilderInterface
    */
-  protected $routeBuilder;
+  protected RouteBuilderInterface $routeBuilder;
 
   /**
    * {@inheritdoc}

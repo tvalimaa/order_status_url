@@ -96,7 +96,7 @@ function order_status_url_tokens($type, $tokens, array $data, array $options, Bu
 function order_status_url_preprocess_commerce_order_receipt(&$variables) {
   $order = $variables['order_entity'] ?? NULL;
 
-  if (!$order instanceof \Drupal\commerce_order\Entity\OrderInterface) {
+  if (!$order instanceof OrderInterface) {
     return;
   }
 

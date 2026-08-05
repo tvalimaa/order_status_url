@@ -42,24 +42,18 @@ class OrderStatusVerifyForm extends FormBase {
 
   /**
    * The module handler.
-   *
-   * @var \Drupal\Core\Extension\ModuleHandlerInterface
    */
-  protected $moduleHandler;
+  protected ModuleHandlerInterface $moduleHandler;
 
   /**
    * The config factory.
-   *
-   * @var \Drupal\Core\Config\ConfigFactoryInterface
    */
-  protected $configFactory;
+  protected ConfigFactoryInterface $configFactory;
 
   /**
    * The flood service.
-   *
-   * @var \Drupal\Core\Flood\FloodInterface
    */
-  protected $flood;
+  protected FloodInterface $flood;
 
   /**
    * {@inheritdoc}
@@ -100,6 +94,10 @@ class OrderStatusVerifyForm extends FormBase {
   /**
    * {@inheritdoc}
    *
+   * @param array $form
+   *   An associative array containing the structure of the form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
    * @param \Drupal\commerce_order\Entity\OrderInterface|null $order
    *   The order being looked up, passed in from the controller.
    */

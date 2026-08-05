@@ -4,6 +4,12 @@ order_status_url.guest_order_status:
     _controller: '\Drupal\order_status_url\Controller\OrderStatusController::status'
     _title: 'Order Status'
   requirements:
+    # Intentionally open: this route is for guest (anonymous) checkout
+    # customers who have no account/permission to check against. The
+    # controller itself enforces access by requiring the exact order
+    # UUID and, via OrderStatusVerifyForm, a matching email address
+    # (plus CAPTCHA/flood-limited attempts) before returning any order
+    # data. See OrderStatusController::status().
     _access: 'TRUE'
   options:
     parameters:

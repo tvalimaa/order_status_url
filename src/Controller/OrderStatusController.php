@@ -106,8 +106,11 @@ class OrderStatusController extends ControllerBase {
   }
 
   /**
-   * Attaches headers that keep this page out of search/AI indexes and
-   * stop the browser leaking the UUID-bearing URL to third parties.
+   * Attaches privacy-related headers to a render array.
+   *
+   * Keeps this page out of search/AI indexes and stops the browser
+   * from leaking the UUID-bearing URL to third parties via the
+   * Referer header.
    *
    * @param array $build
    *   The render array to attach headers to, by reference.
